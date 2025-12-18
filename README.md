@@ -1,6 +1,10 @@
 Mouse Smoothly
 ==============
 
+<p align="center">
+  <img src="Mouse%20Smoothly/AppIcon.png" alt="Mouse Smoothly app icon" width="160">
+</p>
+
 Mouse Smoothly is a macOS menu bar utility that intercepts traditional mouse-wheel events, smooths them via a display-link loop, and reposts them as pixel/line scrolls so apps feel closer to trackpad scrolling. It exposes menu sliders for speed, friction, acceleration, acceleration curves, natural scrolling, launch-at-login, and a floating debug log window.
 
 Project Layout
