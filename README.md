@@ -28,6 +28,7 @@ Developing and Running
   xcodebuild -project "Mouse Smoothly.xcodeproj" -scheme "Mouse Smoothly" -configuration Debug -derivedDataPath .derived-data
   ```
 - Settings are stored in `UserDefaults` under the bundle identifier; changing the bundle ID will reset saved slider values unless you migrate them.
+- Hold the Option key while scrolling to temporarily bypass smoothing and send the raw wheel events through unchanged.
 
 Signed and Notarized Release
 ----------------------------

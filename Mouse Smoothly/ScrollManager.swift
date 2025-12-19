@@ -5,6 +5,7 @@ class ScrollManager {
     
     private var interceptor: Interceptor?
     private let magicNumber: Int64 = 42
+    private let bypassModifier: CGEventFlags = .maskAlternate  // Hold Option to bypass smoothing
     
     func start() {
         DebugWindow.instance?.log("start() called")
@@ -30,6 +31,12 @@ class ScrollManager {
             
             // Log that we received an event
             DebugWindow.instance?.log("📥 Scroll event received")
+            
+            // If the bypass modifier is held, let the native scroll through untouched
+            if event.flags.contains(ScrollManager.shared.bypassModifier) {
+                DebugWindow.instance?.log("Bypass modifier held, passing scroll through")
+                return Unmanaged.passUnretained(event)
+            }
             
             // Check if trackpad (Magic Mouse or Built-in)
             let scrollEvent = ScrollEvent(with: event)
