@@ -9,3 +9,4 @@ dist/
 
 # macOS metadata
 .DS_Store
+.module-cache/
