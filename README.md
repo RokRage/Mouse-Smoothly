@@ -16,8 +16,8 @@ Project Layout
 
 Identifiers and Permissions
 ---------------------------
-- Bundle identifier placeholder: `com.your-domain.Mouse-Smoothly` (set in the Xcode project and `Mouse Smoothly/Info.plist`). Replace `com.your-domain` with your domain before distributing.
-- Launch-at-login helper writes `~/Library/LaunchAgents/com.your-domain.mousesmoothly.plist`. If you change the bundle ID domain, update this to match.
+- Bundle identifier: `com.rokrage.Mouse-Smoothly` (set in the Xcode project and `Mouse Smoothly/Info.plist`). If you fork or rename, update it consistently.
+- Launch-at-login helper writes `~/Library/LaunchAgents/com.rokrage.mousesmoothly.plist`. If you change the bundle ID domain, update this to match.
 - The app requires Accessibility permission. On first launch it will guide the user to System Settings → Privacy & Security → Accessibility to enable the toggle.
 
 Developing and Running

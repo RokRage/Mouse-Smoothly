@@ -16,7 +16,7 @@ class MenuBarController: NSObject {
     // Use LaunchAgent (user-level) for app bundles
     private var launchAgentPath: String {
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(homeDir)/Library/LaunchAgents/com.your-domain.mousesmoothly.plist"
+        return "\(homeDir)/Library/LaunchAgents/com.rokrage.mousesmoothly.plist"
     }
     
     var isEnabled = true {
@@ -255,7 +255,7 @@ class MenuBarController: NSObject {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.your-domain.mousesmoothly</string>
+    <string>com.rokrage.mousesmoothly</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/open</string>
