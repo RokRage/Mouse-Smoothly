@@ -6,6 +6,46 @@ class ScrollManager {
     private var interceptor: Interceptor?
     private let magicNumber: Int64 = 42
     private let bypassModifier: CGEventFlags = .maskAlternate  // Hold Option to bypass smoothing
+    private var excludedBundleIDs: Set<String> = []
+    private let excludedDefaultsKey = "MouseSmoothly.excludedBundleIDs"
+    
+    init() {
+        loadExcludedBundleIDs()
+    }
+    
+    private func loadExcludedBundleIDs() {
+        if let stored = UserDefaults.standard.array(forKey: excludedDefaultsKey) as? [String] {
+            excludedBundleIDs = Set(stored)
+        }
+    }
+    
+    private func persistExcluded() {
+        UserDefaults.standard.set(Array(excludedBundleIDs), forKey: excludedDefaultsKey)
+    }
+    
+    private func isFrontmostExcluded() -> Bool {
+        guard !excludedBundleIDs.isEmpty else { return false }
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return false }
+        if excludedBundleIDs.contains(bundleID) {
+            DebugWindow.instance?.log("Excluded app detected (\(bundleID)), passing scroll through")
+            return true
+        }
+        return false
+    }
+    
+    func isExcluded(bundleID: String) -> Bool {
+        excludedBundleIDs.contains(bundleID)
+    }
+    
+    func toggleExclusion(bundleID: String) -> Bool {
+        if excludedBundleIDs.contains(bundleID) {
+            excludedBundleIDs.remove(bundleID)
+        } else {
+            excludedBundleIDs.insert(bundleID)
+        }
+        persistExcluded()
+        return excludedBundleIDs.contains(bundleID)
+    }
     
     func start() {
         DebugWindow.instance?.log("start() called")
@@ -31,6 +71,10 @@ class ScrollManager {
             
             // Log that we received an event
             DebugWindow.instance?.log("📥 Scroll event received")
+            
+            if ScrollManager.shared.isFrontmostExcluded() {
+                return Unmanaged.passUnretained(event)
+            }
             
             // If the bypass modifier is held, let the native scroll through untouched
             if event.flags.contains(ScrollManager.shared.bypassModifier) {

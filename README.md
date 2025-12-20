@@ -19,6 +19,12 @@ Identifiers and Permissions
 - Bundle identifier: `com.rokrage.Mouse-Smoothly` (set in the Xcode project and `Mouse Smoothly/Info.plist`). If you fork or rename, update it consistently.
 - Launch-at-login helper writes `~/Library/LaunchAgents/com.rokrage.mousesmoothly.plist`. If you change the bundle ID domain, update this to match.
 - The app requires Accessibility permission. On first launch it will guide the user to System Settings → Privacy & Security → Accessibility to enable the toggle.
+- Hold Option while scrolling to temporarily bypass smoothing.
+- Per-app toggle: Use the menu item “Disable/Enable Smooth Scroll for <App>” (updates to the frontmost app). This writes to the exclusion list in `UserDefaults`.
+- Exclusion list can also be set manually via `MouseSmoothly.excludedBundleIDs`. Example:
+  ```
+  defaults write com.rokrage.Mouse-Smoothly MouseSmoothly.excludedBundleIDs -array "com.google.Chrome" "org.godotengine.godot"
+  ```
 
 Developing and Running
 ----------------------

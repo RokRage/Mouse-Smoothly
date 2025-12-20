@@ -1,11 +1,12 @@
 import Cocoa
 
-class MenuBarController: NSObject {
+class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var enabledMenuItem: NSMenuItem!
     private var launchAtStartupMenuItem: NSMenuItem!
     private var debugWindowMenuItem: NSMenuItem!
     private var naturalScrollMenuItem: NSMenuItem!
+    private var appToggleMenuItem: NSMenuItem!
     private var speedSlider: NSSlider!
     private var frictionSlider: NSSlider!
     private var accelSlider: NSSlider!
@@ -38,6 +39,7 @@ class MenuBarController: NSObject {
         }
         
         let menu = NSMenu()
+        menu.delegate = self
         
         // Enable/Disable toggle
         enabledMenuItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "e")
@@ -106,6 +108,12 @@ class MenuBarController: NSObject {
         naturalScrollMenuItem.target = self
         naturalScrollMenuItem.state = ScrollPoster.shared.naturalScroll ? .on : .off
         menu.addItem(naturalScrollMenuItem)
+        
+        // Per-app toggle
+        appToggleMenuItem = NSMenuItem(title: "Disable Smooth Scroll for Current App", action: #selector(toggleAppExclusion), keyEquivalent: "")
+        appToggleMenuItem.target = self
+        appToggleMenuItem.isEnabled = false
+        menu.addItem(appToggleMenuItem)
         
         // Launch at Startup
         launchAtStartupMenuItem = NSMenuItem(title: "Launch at Startup", action: #selector(toggleLaunchAtStartup), keyEquivalent: "")
@@ -230,6 +238,37 @@ class MenuBarController: NSObject {
         naturalScrollMenuItem.state = ScrollPoster.shared.naturalScroll ? .on : .off
     }
     
+    @objc private func toggleAppExclusion() {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let bundleID = app.bundleIdentifier else {
+            return
+        }
+        let nowExcluded = ScrollManager.shared.toggleExclusion(bundleID: bundleID)
+        let name = app.localizedName ?? "App"
+        updateAppToggleMenuItem(name: name, bundleID: bundleID, excluded: nowExcluded)
+    }
+    
+    private func updateAppToggleMenuItem(name: String, bundleID: String, excluded: Bool) {
+        appToggleMenuItem.isEnabled = true
+        appToggleMenuItem.state = excluded ? .on : .off
+        appToggleMenuItem.title = excluded ? "Enable Smooth Scroll for \(name)" : "Disable Smooth Scroll for \(name)"
+        appToggleMenuItem.toolTip = bundleID
+    }
+    
+    private func refreshAppToggleMenuItem() {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let bundleID = app.bundleIdentifier else {
+            appToggleMenuItem.title = "Current app unavailable"
+            appToggleMenuItem.isEnabled = false
+            appToggleMenuItem.state = .off
+            appToggleMenuItem.toolTip = nil
+            return
+        }
+        let name = app.localizedName ?? "App"
+        let excluded = ScrollManager.shared.isExcluded(bundleID: bundleID)
+        updateAppToggleMenuItem(name: name, bundleID: bundleID, excluded: excluded)
+    }
+    
     @objc private func toggleLaunchAtStartup() {
         let fm = FileManager.default
         
@@ -317,5 +356,11 @@ class MenuBarController: NSObject {
     
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+extension MenuBarController {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshAppToggleMenuItem()
     }
 }
