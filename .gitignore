@@ -2,6 +2,8 @@
 .derived-data/
 dist/
 *.dSYM
+memory.md
+*.dmg
 
 # Xcode user data
 **/xcuserdata/
