@@ -69,8 +69,15 @@ class ScrollManager {
                 return Unmanaged.passUnretained(event)
             }
             
-            // Log that we received an event
-            DebugWindow.instance?.log("📥 Scroll event received")
+            // CRITICAL: Check trackpad FIRST before any logging or processing
+            // This prevents jitter by passing trackpad events through immediately
+            let scrollEvent = ScrollEvent(with: event)
+            if scrollEvent.isTrackpad() {
+                return Unmanaged.passUnretained(event)
+            }
+            
+            // Log that we received a mouse scroll event
+            DebugWindow.instance?.log("📥 Mouse scroll event received")
             
             if ScrollManager.shared.isFrontmostExcluded() {
                 return Unmanaged.passUnretained(event)
@@ -82,14 +89,7 @@ class ScrollManager {
                 return Unmanaged.passUnretained(event)
             }
             
-            // Check if trackpad (Magic Mouse or Built-in)
-            let scrollEvent = ScrollEvent(with: event)
-            if scrollEvent.isTrackpad() {
-                DebugWindow.instance?.log("⏭️  Skipping trackpad event")
-                return Unmanaged.passUnretained(event)
-            }
-            
-            // It's a chunky mouse wheel event!
+            // It's a chunky mouse wheel event - process it!
             DebugWindow.instance?.log("🖱️ Processing mouse scroll")
             // Feed to poster
             ScrollPoster.shared.update(event: event, proxy: proxy)
