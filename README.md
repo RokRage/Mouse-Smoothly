@@ -12,7 +12,8 @@ Project Layout
 --------------
 - `Mouse Smoothly/` — App sources and assets.
 - `Mouse Smoothly.xcodeproj` — Xcode project.
-- `build_scripts/build_release.sh` — Build, sign, notarize, and package script.
+- `build-dmg.sh` — Build, sign, notarize, and package a distributable DMG.
+- `build-and-run.sh` — Build and install to /Applications, then launch (for local testing with stable Accessibility permissions).
 
 Identifiers and Permissions
 ---------------------------
@@ -39,22 +40,26 @@ Developing and Running
 
 Signed and Notarized Release
 ----------------------------
-Use `build_scripts/build_release.sh` to produce a signed, notarized app and DMG. Requirements: Xcode command-line tools, a Developer ID Application certificate, and notarization credentials.
+Use `build-dmg.sh` to produce a signed, notarized DMG. Requirements: Xcode command-line tools, a "Developer ID Application" certificate in your login keychain, and a notarytool keychain profile.
 
-Example workflow:
+One-time setup — create the notary keychain profile:
 ```
-export DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
-export NOTARY_PROFILE="MouseSmoothlyProfile"   # created via `xcrun notarytool store-credentials`
-./build_scripts/build_release.sh
+xcrun notarytool store-credentials "MouseSmoothly-Notary" \
+  --apple-id "<your-apple-id>" --team-id "<TEAMID>" --password "<app-specific-password>"
 ```
+
+Then build:
+```
+./build-dmg.sh
+```
+
+Overridable via env vars (sensible defaults are baked in): `TEAM_ID`, `SIGN_IDENTITY` (Developer ID Application identity), and `NOTARY_PROFILE` (the keychain profile name).
 
 What the script does:
-1. Builds the Xcode project (Release, using a local derived data path).
-2. Cleans stray nested bundles, signs the app with hardened runtime and your entitlements.
-3. Creates `dist/Mouse-Smoothly.dmg` with an Applications symlink and install note.
-4. Submits the DMG for notarization, waits, and staples tickets to the DMG and app.
-
-If you prefer not to use a keychain profile, set `APPLE_ID`, `TEAM_ID`, and `NOTARY_PASSWORD` instead of `NOTARY_PROFILE`. Additional overrides: `CONFIGURATION`, `DERIVED_DATA`, `DIST_DIR`, `DMG_NAME`.
+1. Builds the Xcode project (Release, into a local `build/` directory).
+2. Re-signs the app with the Developer ID identity, hardened runtime, a secure timestamp, and your entitlements.
+3. Lays out `Mouse-Smoothly.dmg` with an Applications symlink and an installation note.
+4. Signs the DMG, submits it for notarization, waits, then staples and validates the ticket.
 
 Troubleshooting
 ---------------
