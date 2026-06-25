@@ -20,5 +20,8 @@ let menuBarController = MenuBarController()
 // Start the scroll manager
 ScrollManager.shared.start()
 
+// Start the mouse-button remapper (extra buttons -> Page Up/Down, etc.)
+ButtonManager.shared.start()
+
 // Run the application
 app.run()

@@ -193,6 +193,25 @@ class ScrollPoster {
         startLoop()
     }
     
+    // Inject a raw scroll distance (in pixels) directly into the smoothing buffer.
+    // Used for synthetic scrolls like Page Up/Down so they glide through the same
+    // easing pipeline as the mouse wheel instead of jumping.
+    func scrollBy(x: Double, y: Double) {
+        stateLock.lock()
+        // Match update()'s direction-change reset so reversing mid-glide doesn't jerk.
+        let remainingY = buffer.y - current.y
+        let remainingX = buffer.x - current.x
+        if (y * remainingY < 0) || (x * remainingX < 0) {
+            buffer = current
+            smooth = current
+        }
+        buffer.x += x
+        buffer.y += y
+        stateLock.unlock()
+
+        startLoop()
+    }
+
     func processing() {
         // Measure the actual time elapsed since the previous frame so smoothing
         // behaves identically on 60Hz, 120Hz ProMotion, or when frames are dropped.

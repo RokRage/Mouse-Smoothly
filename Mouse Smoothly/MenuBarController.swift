@@ -7,6 +7,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
     private var debugWindowMenuItem: NSMenuItem!
     private var naturalScrollMenuItem: NSMenuItem!
     private var appToggleMenuItem: NSMenuItem!
+    private var mouseButtonsMenu: NSMenu!
     private var speedSlider: NSSlider!
     private var frictionSlider: NSSlider!
     private var accelSlider: NSSlider!
@@ -101,8 +102,17 @@ class MenuBarController: NSObject, NSMenuDelegate {
         curveMenuItem.submenu = curveMenu
         menu.addItem(curveMenuItem)
         
+        // Mouse Buttons remapping
+        let buttonsMenu = NSMenu()
+        buttonsMenu.delegate = self
+        buildButtonsMenu(buttonsMenu)
+        mouseButtonsMenu = buttonsMenu
+        let buttonsMenuItem = NSMenuItem(title: "Mouse Buttons", action: nil, keyEquivalent: "")
+        buttonsMenuItem.submenu = buttonsMenu
+        menu.addItem(buttonsMenuItem)
+
         menu.addItem(NSMenuItem.separator())
-        
+
         // Natural Scroll (invert direction)
         naturalScrollMenuItem = NSMenuItem(title: "Natural Scroll", action: #selector(toggleNaturalScroll), keyEquivalent: "")
         naturalScrollMenuItem.target = self
@@ -233,6 +243,56 @@ class MenuBarController: NSObject, NSMenuDelegate {
         }
     }
     
+    // MARK: - Mouse Buttons submenu
+
+    private func buildButtonsMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+
+        // Hint showing the most recently pressed button so users can identify
+        // which physical button maps to which number.
+        let hintTitle: String
+        if let last = ButtonManager.shared.lastButtonPressed {
+            hintTitle = "Last pressed: Button \(last)"
+        } else {
+            hintTitle = "Press an extra button to detect it"
+        }
+        let hint = NSMenuItem(title: hintTitle, action: nil, keyEquivalent: "")
+        hint.isEnabled = false
+        menu.addItem(hint)
+        menu.addItem(NSMenuItem.separator())
+
+        for button in ButtonManager.mappableButtons {
+            let current = ButtonManager.shared.action(for: button)
+            let buttonItem = NSMenuItem(title: "Button \(button)", action: nil, keyEquivalent: "")
+
+            let actionMenu = NSMenu()
+            for action in ButtonAction.allCases {
+                let item = NSMenuItem(title: action.name, action: #selector(selectButtonAction(_:)), keyEquivalent: "")
+                item.target = self
+                // Encode button + action in the tag: button * 100 + action.
+                item.tag = Int(button) * 100 + action.rawValue
+                item.state = current == action ? .on : .off
+                actionMenu.addItem(item)
+            }
+            buttonItem.submenu = actionMenu
+
+            // Show the current mapping inline next to the button name.
+            if current != .none {
+                buttonItem.title = "Button \(button)  →  \(current.name)"
+            }
+            menu.addItem(buttonItem)
+        }
+    }
+
+    @objc private func selectButtonAction(_ sender: NSMenuItem) {
+        let button = Int64(sender.tag / 100)
+        guard let action = ButtonAction(rawValue: sender.tag % 100) else { return }
+        ButtonManager.shared.setAction(action, for: button)
+        if let menu = mouseButtonsMenu {
+            buildButtonsMenu(menu)
+        }
+    }
+
     @objc private func toggleNaturalScroll() {
         ScrollPoster.shared.naturalScroll.toggle()
         naturalScrollMenuItem.state = ScrollPoster.shared.naturalScroll ? .on : .off
@@ -327,7 +387,13 @@ class MenuBarController: NSObject, NSMenuDelegate {
         • Friction: Lower = more glide/inertia
         • Accel: How much faster wheel spins speed up
         • Natural Scroll: Invert scroll direction
-        
+
+        MOUSE BUTTONS:
+        • Map extra mouse buttons (thumb buttons) to
+          Page Up / Page Down / Home / End.
+        • Open "Mouse Buttons", press a button to see its
+          number, then pick an action for it.
+
         ACCEL CURVES:
         • Linear: Constant response, predictable
         • Ease In: Slow start, speeds up (precise)
@@ -361,6 +427,10 @@ class MenuBarController: NSObject, NSMenuDelegate {
 
 extension MenuBarController {
     func menuNeedsUpdate(_ menu: NSMenu) {
-        refreshAppToggleMenuItem()
+        if menu === mouseButtonsMenu {
+            buildButtonsMenu(menu)
+        } else {
+            refreshAppToggleMenuItem()
+        }
     }
 }
