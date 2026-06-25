@@ -1,5 +1,6 @@
 # Build artifacts
 .derived-data/
+build/
 dist/
 *.dSYM
 memory.md

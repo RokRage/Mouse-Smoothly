@@ -10,9 +10,23 @@
 		4CC4841D2EF30D9100CBAB90 /* Mouse Smoothly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Mouse Smoothly.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		4CC484A02EF30D9100CBAB90 /* Exceptions for "Mouse Smoothly" folder in "Mouse Smoothly" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Entitlements.plist,
+				Info.plist,
+			);
+			target = 4CC4841C2EF30D9100CBAB90 /* Mouse Smoothly */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4CC4841F2EF30D9100CBAB90 /* Mouse Smoothly */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4CC484A02EF30D9100CBAB90 /* Exceptions for "Mouse Smoothly" folder in "Mouse Smoothly" target */,
+			);
 			path = "Mouse Smoothly";
 			sourceTree = "<group>";
 		};
@@ -255,7 +269,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 82PQ4FMW6T;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = NO;
@@ -292,7 +306,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 82PQ4FMW6T;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = NO;
