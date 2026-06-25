@@ -5,7 +5,7 @@ Mouse Smoothly
   <img src="Mouse%20Smoothly/AppIcon.png" alt="Mouse Smoothly app icon" width="160">
 </p>
 
-Mouse Smoothly is a macOS menu bar utility that intercepts traditional mouse-wheel events, smooths them via a display-link loop, and reposts them as pixel/line scrolls so apps feel closer to trackpad scrolling. It exposes menu sliders for speed, friction, acceleration, acceleration curves, natural scrolling, launch-at-login, and a floating debug log window.
+Mouse Smoothly is a macOS menu bar utility that intercepts traditional mouse-wheel events, smooths them via a display-link loop, and reposts them as pixel/line scrolls so apps feel closer to trackpad scrolling. It exposes menu sliders for speed, friction, acceleration, acceleration curves, natural scrolling, launch-at-login, and a floating debug log window. It can also remap a mouse's extra (thumb) buttons to Page Up, Page Down, Home, or End — with Page Up/Down flowing through the same smooth-scroll engine instead of jumping.
 
 
 Project Layout
@@ -21,6 +21,7 @@ Identifiers and Permissions
 - The app requires Accessibility permission. On first launch it will guide the user to System Settings → Privacy & Security → Accessibility to enable the toggle.
 - Hold Option while scrolling to temporarily bypass smoothing.
 - Per-app toggle: Use the menu item “Disable/Enable Smooth Scroll for <App>” (updates to the frontmost app). This writes to the exclusion list in `UserDefaults`.
+- Mouse buttons: Use the “Mouse Buttons” menu to map extra buttons (3–6) to Page Up, Page Down, Home, or End. Press a button to see its number in the menu hint, then pick an action. Page Up/Down smooth-scroll one focused-window height per press; mappings are stored in `UserDefaults` under `MouseSmoothly.buttonMappings`.
 - Exclusion list can also be set manually via `MouseSmoothly.excludedBundleIDs`. Example:
   ```
   defaults write com.rokrage.Mouse-Smoothly MouseSmoothly.excludedBundleIDs -array "com.google.Chrome" "org.godotengine.godot"
