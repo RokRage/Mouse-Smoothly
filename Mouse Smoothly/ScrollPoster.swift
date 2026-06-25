@@ -17,8 +17,19 @@ class ScrollPoster {
     
     private var displayLink: CVDisplayLink?
     
-    private var buffer = (x: 0.0, y: 0.0)
-    private var current = (x: 0.0, y: 0.0)
+    private var buffer = (x: 0.0, y: 0.0)   // raw accumulated target
+    private var smooth = (x: 0.0, y: 0.0)   // intermediate stage (continuous position)
+    private var current = (x: 0.0, y: 0.0)  // emitted position (continuous velocity)
+
+    // `update()` runs on the event-tap (main) thread while `processing()` runs on the
+    // CVDisplayLink thread; this guards the shared buffer/current state they both touch.
+    private let stateLock = NSLock()
+
+    // Sub-pixel remainder so fractional motion isn't lost to integer rounding
+    private var pixelRemainder = (x: 0.0, y: 0.0)
+
+    // Wall-clock time of the previous frame, for frame-rate-independent smoothing
+    private var lastFrameTime: CFTimeInterval = 0
     
     // Acceleration curve types
     enum AccelCurve: Int, CaseIterable {
@@ -83,6 +94,8 @@ class ScrollPoster {
     // State
     private var lastEventRef: CGEvent?
     private var lastEventTime: CFTimeInterval = 0
+    // Low-pass-filtered inter-event interval used to drive acceleration smoothly.
+    private var smoothedInterval: CFTimeInterval = 0
     
     // Config state
     private var isRunning = false
@@ -114,9 +127,19 @@ class ScrollPoster {
         
         // Calculate acceleration based on event frequency
         let now = CFAbsoluteTimeGetCurrent()
-        let timeSinceLast = lastEventTime > 0 ? now - lastEventTime : 1.0
+        let rawInterval = lastEventTime > 0 ? now - lastEventTime : 1.0
         lastEventTime = now
-        
+
+        // Wheel notches don't arrive at even intervals, so the raw gap is noisy.
+        // After an idle gap, start a fresh estimate; otherwise low-pass filter it so
+        // acceleration reflects sustained scroll speed rather than per-notch jitter.
+        if rawInterval > 0.2 {
+            smoothedInterval = rawInterval
+        } else {
+            smoothedInterval = smoothedInterval * 0.6 + rawInterval * 0.4
+        }
+        let timeSinceLast = smoothedInterval
+
         // Acceleration: the faster events come in, the higher the multiplier
         // timeSinceLast of ~0.016s (60fps) = fast scrolling
         // timeSinceLast of ~0.1s = slow scrolling
@@ -148,76 +171,115 @@ class ScrollPoster {
         // Apply acceleration
         dx *= accelMultiplier
         dy *= accelMultiplier
-        
+
+        stateLock.lock()
         // Detect direction change - if scrolling in opposite direction, reset to prevent jerk
         let remainingY = buffer.y - current.y
         let remainingX = buffer.x - current.x
-        
+
         // If new scroll is in opposite direction to remaining scroll, reset
         if (dy * remainingY < 0) || (dx * remainingX < 0) {
             // Direction changed - reset to current position
             buffer = current
+            smooth = current
         }
-        
-        // Add to buffer
+
+        // Add to buffer. Rapid scrolls simply accumulate here; the cascaded smoothing
+        // in processing() eases the output into the new target without a hard step.
         buffer.x += dx
         buffer.y += dy
-        
+        stateLock.unlock()
+
         startLoop()
     }
     
     func processing() {
-        // Calculate next frame
-        let newX = Interpolator.lerp(src: current.x, dest: buffer.x, trans: friction)
-        let newY = Interpolator.lerp(src: current.y, dest: buffer.y, trans: friction)
-        
+        // Measure the actual time elapsed since the previous frame so smoothing
+        // behaves identically on 60Hz, 120Hz ProMotion, or when frames are dropped.
+        let now = CFAbsoluteTimeGetCurrent()
+        let dt = lastFrameTime > 0 ? min(now - lastFrameTime, 0.1) : (1.0 / 60.0)
+        lastFrameTime = now
+
+        // Convert the per-frame `friction` (tuned at 60fps) into a time constant and
+        // derive an exponentially-decaying interpolation factor for this frame's dt.
+        // This factor trades responsiveness for smoothness across the two cascaded
+        // stages below: lower = smoother/longer glide, higher = snappier.
+        let clampedFriction = min(max(friction, 0.001), 0.999)
+        let rate = -log(1.0 - clampedFriction) * 60.0 * 1.2
+        let factor = 1.0 - exp(-rate * dt)
+
+        stateLock.lock()
+        // Stage 1: ease the intermediate position toward the raw target. This absorbs
+        // bursty input so `smooth` is always a continuous curve, never a hard step.
+        smooth.x = Interpolator.lerp(src: smooth.x, dest: buffer.x, trans: factor)
+        smooth.y = Interpolator.lerp(src: smooth.y, dest: buffer.y, trans: factor)
+
+        // Stage 2: ease the emitted position toward the intermediate one. Because
+        // `smooth` is continuous, `current` ends up with continuous velocity too, so
+        // even a large single scroll ramps in along an S-curve instead of jumping.
+        let newX = Interpolator.lerp(src: current.x, dest: smooth.x, trans: factor)
+        let newY = Interpolator.lerp(src: current.y, dest: smooth.y, trans: factor)
+
         let diffX = newX - current.x
         let diffY = newY - current.y
-        
+
         current.x = newX
         current.y = newY
-        
-        // Check if stopped
+
+        // Check if stopped (relative to the true target)
         let distRemaining = abs(buffer.x - current.x) + abs(buffer.y - current.y)
+        let settleX = buffer.x - current.x
+        let settleY = buffer.y - current.y
         if distRemaining < stopThreshold {
+            current = buffer
+            smooth = buffer
+        }
+        stateLock.unlock()
+
+        if distRemaining < stopThreshold {
+            // Flush any final motion (including the tiny settle distance) then stop.
+            postEvent(dx: settleX + diffX, dy: settleY + diffY)
             stopLoop()
-            // Reset to prevent drift
-            current = buffer 
             return
         }
-        
-        // Post event
-        if abs(diffX) > 0.01 || abs(diffY) > 0.01 {
-            postEvent(dx: diffX, dy: diffY)
-        }
+
+        postEvent(dx: diffX, dy: diffY)
     }
     
     private func postEvent(dx: Double, dy: Double) {
         // Apply natural scroll inversion if enabled
         let finalDx = naturalScroll ? -dx : dx
         let finalDy = naturalScroll ? -dy : dy
-        
-        // Create scroll event using LINE units (better app compatibility)
+
+        // Carry over the fractional part of the previous frame so sub-pixel motion
+        // accumulates instead of being thrown away by integer rounding. This is what
+        // keeps slow scrolling smooth rather than stepping in visible chunks.
+        let rawX = finalDx + pixelRemainder.x
+        let rawY = finalDy + pixelRemainder.y
+        let postX = rawX.rounded(.toNearestOrEven)
+        let postY = rawY.rounded(.toNearestOrEven)
+        pixelRemainder.x = rawX - postX
+        pixelRemainder.y = rawY - postY
+
+        if postX == 0 && postY == 0 { return }
+
+        // Create scroll event in PIXEL units for fine-grained, smooth movement.
         guard let event = CGEvent(scrollWheelEvent2Source: nil,
-                                  units: .line,
+                                  units: .pixel,
                                   wheelCount: 2,
-                                  wheel1: Int32(round(finalDy / 10)),
-                                  wheel2: Int32(round(finalDx / 10)),
+                                  wheel1: Int32(postY),
+                                  wheel2: Int32(postX),
                                   wheel3: 0) else {
             return
         }
-        
-        // Set pixel deltas for smooth scrolling
-        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: finalDy)
-        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: finalDx)
-        
-        // Set fixed-point deltas
-        event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: finalDy / 10)
-        event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: finalDx / 10)
-        
+
+        // Set pixel deltas explicitly for apps that read them directly.
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: postY)
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: postX)
+
         // Mark as our event so we don't re-intercept it
         event.setIntegerValueField(.eventSourceUserData, value: 42)
-        
+
         // Post at HID level
         event.post(tap: .cghidEventTap)
     }
@@ -243,7 +305,14 @@ class ScrollPoster {
     private func stopLoop() {
         if !isRunning { return }
         isRunning = false
-        
+
+        // Reset timing/remainder so the next scroll burst starts cleanly.
+        lastFrameTime = 0
+        pixelRemainder = (x: 0.0, y: 0.0)
+        stateLock.lock()
+        smooth = current
+        stateLock.unlock()
+
         if let link = displayLink, CVDisplayLinkIsRunning(link) {
             CVDisplayLinkStop(link)
         }
