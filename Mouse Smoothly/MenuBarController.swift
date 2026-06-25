@@ -404,7 +404,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
         Requires Accessibility permissions.
         Grant under: System Settings → Privacy & Security → Accessibility
         
-        v1.0
+        v1.4
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
