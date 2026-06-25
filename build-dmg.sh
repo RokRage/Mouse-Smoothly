@@ -1,114 +1,111 @@
 #!/bin/bash
-# Build Mouse Smoothly DMG for distribution
-# This creates an unsigned .dmg since code-signed versions break event tap functionality
+# Build a signed + notarized DMG of Mouse Smoothly for distribution.
+#
+# Pipeline:
+#   1. xcodebuild Release  ->  the .app
+#   2. re-sign the .app with Developer ID Application + Hardened Runtime
+#   3. lay out the DMG (app + /Applications symlink + instructions)
+#   4. create and sign the DMG
+#   5. submit to Apple notary service and wait
+#   6. staple the notarization ticket and verify
+#
+# Requires (one-time setup):
+#   - A "Developer ID Application" certificate in the login keychain.
+#   - A notarytool keychain profile (see NOTARY_PROFILE below), created with:
+#       xcrun notarytool store-credentials "MouseSmoothly-Notary" \
+#         --apple-id "<id>" --team-id 82PQ4FMW6T --password "<app-specific-pw>"
 
-set -e  # Exit on error
+set -euo pipefail
 
-echo "🚀 Building Mouse Smoothly DMG..."
-
-# Configuration
+# ---- Configuration (override via env vars if needed) -------------------------
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-XCODE_BUILD_DIR="$HOME/Library/Developer/Xcode/DerivedData/Mouse_Smoothly-bolhwtlczxeyrpddmuhzycsjqexa/Build/Products/Debug"
-ICON_PATH="$PROJECT_DIR/macos_icons/AppIcon.icns"
+APP_NAME="Mouse Smoothly"
+SCHEME="$APP_NAME"
+TEAM_ID="${TEAM_ID:-82PQ4FMW6T}"
+SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Ian Jolly ($TEAM_ID)}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-MouseSmoothly-Notary}"
+ENTITLEMENTS="$PROJECT_DIR/Mouse Smoothly/Entitlements.plist"
+
+BUILD_DIR="$PROJECT_DIR/build"
+RELEASE_DIR="$BUILD_DIR/Release"
+APP_PATH="$RELEASE_DIR/$APP_NAME.app"
 DMG_NAME="Mouse-Smoothly.dmg"
+DMG_PATH="$PROJECT_DIR/$DMG_NAME"
+STAGE_DIR="$PROJECT_DIR/dmg-temp"
 
-# Clean up old builds
-echo "🧹 Cleaning up old builds..."
-rm -rf "$PROJECT_DIR/dmg-temp"
-rm -f "$PROJECT_DIR/$DMG_NAME"
+echo "🚀 Building signed + notarized DMG for $APP_NAME"
+echo "   Identity: $SIGN_IDENTITY"
 
-# Find the Xcode build (try multiple locations)
-BUILT_APP=$(mdfind -name "Mouse Smoothly.app" | grep -i deriveddata | head -1)
-if [ -z "$BUILT_APP" ]; then
-    echo "❌ Error: Could not find Xcode build of Mouse Smoothly.app"
-    echo "   Please build the project in Xcode first (Cmd+B)"
-    exit 1
-fi
+# ---- 1. Build the Release app -----------------------------------------------
+echo "🔨 Building Release..."
+rm -rf "$BUILD_DIR" "$STAGE_DIR" "$DMG_PATH"
+xcodebuild -project "$PROJECT_DIR/$APP_NAME.xcodeproj" \
+    -scheme "$SCHEME" \
+    -configuration Release \
+    -derivedDataPath "$BUILD_DIR" \
+    CONFIGURATION_BUILD_DIR="$RELEASE_DIR" \
+    build | tail -1
 
-echo "✅ Found Xcode build at: $BUILT_APP"
+[ -d "$APP_PATH" ] || { echo "❌ Build product not found at $APP_PATH"; exit 1; }
 
-# Create temporary directory for DMG contents
+# ---- 2. Re-sign with Developer ID + Hardened Runtime ------------------------
+# The Automatic signing above uses the Apple Development cert; for distribution
+# the app must be signed with Developer ID Application and a secure timestamp.
+echo "✍️  Signing with Developer ID..."
+codesign --force --deep --options runtime --timestamp \
+    --entitlements "$ENTITLEMENTS" \
+    --sign "$SIGN_IDENTITY" \
+    "$APP_PATH"
+
+echo "🔎 Verifying signature..."
+codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+# Gatekeeper assessment (will say "rejected" until notarization is stapled; that's fine here).
+spctl -a -t exec -vv "$APP_PATH" 2>&1 || true
+
+# ---- 3. Lay out the DMG contents -------------------------------------------
 echo "📦 Preparing DMG contents..."
-mkdir -p dmg-temp
+mkdir -p "$STAGE_DIR"
+cp -R "$APP_PATH" "$STAGE_DIR/$APP_NAME.app"
+ln -s /Applications "$STAGE_DIR/Applications"
 
-# Copy app
-cp -R "$BUILT_APP" "dmg-temp/Mouse Smoothly.app"
+cat > "$STAGE_DIR/INSTALLATION.txt" << 'EOF'
+Mouse Smoothly — Installation
+=============================
 
-# Add icon to app bundle
-if [ -f "$ICON_PATH" ]; then
-    cp "$ICON_PATH" "dmg-temp/Mouse Smoothly.app/Contents/Resources/AppIcon.icns"
-    echo "✅ Added app icon"
-else
-    echo "⚠️  Warning: Icon not found at $ICON_PATH"
-fi
+1. Drag "Mouse Smoothly.app" onto the Applications folder.
+2. Launch it from Applications (it lives in the menu bar).
+3. When prompted, open System Settings -> Privacy & Security -> Accessibility
+   and enable "Mouse Smoothly".
 
-# Create Applications symlink
-ln -s /Applications "dmg-temp/Applications"
-
-# Create installation instructions
-cat > "dmg-temp/INSTALLATION.txt" << 'EOF'
-Mouse Smoothly Installation Instructions
-=========================================
-
-IMPORTANT: This app uses system-level event monitoring which requires
-special installation steps on macOS.
-
-Installation Steps:
--------------------
-
-1. Drag "Mouse Smoothly.app" to the Applications folder
-
-2. Open System Settings → Privacy & Security → Accessibility
-
-3. Click the lock icon and authenticate
-
-4. Click the "+" button and navigate to /Applications
-
-5. Select "Mouse Smoothly" and click "Open"
-
-6. Make sure the toggle next to "Mouse Smoothly" is ON
-
-7. Right-click on "Mouse Smoothly" in Applications and choose "Open"
-   (Do NOT double-click - you must right-click → Open the first time)
-
-8. Click "Open" when warned about an unidentified developer
-
-9. The app will appear in your menu bar
-
-Note: This app cannot be code-signed due to macOS restrictions on
-event monitoring APIs. It is safe to use but requires the right-click
-→ Open method on first launch to bypass Gatekeeper.
-
-After the first launch with right-click → Open, you can launch it
-normally by double-clicking.
-
-For support, visit: https://github.com/YourUsername/Mouse-Smoothly
+This build is signed with a Developer ID and notarized by Apple, so it should
+open without Gatekeeper warnings.
 EOF
 
-echo "✅ Created installation instructions"
-
-# Create DMG
+# ---- 4. Create and sign the DMG --------------------------------------------
 echo "💿 Creating DMG..."
-hdiutil create -volname "Mouse Smoothly" \
-    -srcfolder dmg-temp \
-    -ov \
-    -format UDZO \
-    "$PROJECT_DIR/$DMG_NAME"
+hdiutil create -volname "$APP_NAME" \
+    -srcfolder "$STAGE_DIR" \
+    -ov -format UDZO \
+    "$DMG_PATH" >/dev/null
 
-# Clean up
-rm -rf dmg-temp
+echo "✍️  Signing DMG..."
+codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG_PATH"
 
-# Get file size
-DMG_SIZE=$(du -h "$PROJECT_DIR/$DMG_NAME" | cut -f1)
+# ---- 5. Notarize ------------------------------------------------------------
+echo "☁️  Submitting to Apple notary service (this can take a few minutes)..."
+xcrun notarytool submit "$DMG_PATH" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    --wait
 
+# ---- 6. Staple + verify -----------------------------------------------------
+echo "📎 Stapling ticket..."
+xcrun stapler staple "$DMG_PATH"
+xcrun stapler validate "$DMG_PATH"
+spctl -a -t open --context context:primary-signature -vv "$DMG_PATH" 2>&1 || true
+
+# ---- Done -------------------------------------------------------------------
+rm -rf "$STAGE_DIR"
+DMG_SIZE=$(du -h "$DMG_PATH" | cut -f1)
 echo ""
-echo "✅ Success! DMG created:"
-echo "   📍 Location: $PROJECT_DIR/$DMG_NAME"
-echo "   📊 Size: $DMG_SIZE"
-echo ""
-echo "The DMG contains:"
-echo "  - Mouse Smoothly.app (unsigned, working version)"
-echo "  - Applications symlink"
-echo "  - INSTALLATION.txt with user instructions"
-echo ""
-echo "Ready for distribution! 🎉"
+echo "✅ Done!  Notarized DMG ready:"
+echo "   📍 $DMG_PATH  ($DMG_SIZE)"
