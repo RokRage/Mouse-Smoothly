@@ -7,9 +7,16 @@ Mouse Smoothly
 
 Mouse Smoothly is a macOS menu bar utility that makes a standard mouse wheel feel closer to trackpad scrolling. It intercepts traditional mouse-wheel events, smooths them via a display-link loop, and reposts them as pixel/line scrolls.
 
-From the menu bar you can tune speed, friction, acceleration, and the acceleration curve, toggle natural scrolling and launch-at-login, and open a floating debug log window.
-
-It can also remap a mouse's extra (thumb) buttons to Page Up, Page Down, Home, or End — with Page Up/Down flowing through the same smooth-scroll engine instead of jumping.
+Features
+--------
+- **Smooth scrolling** — turns chunky wheel notches into fluid pixel scrolling.
+- **Tunable feel** — adjust speed, friction, and acceleration, and pick an acceleration curve.
+- **Natural scroll** — optionally invert the scroll direction.
+- **Per-app exclusions** — disable smoothing for specific apps.
+- **Mouse button remapping** — map extra (thumb) buttons to Page Up, Page Down, Home, or End; Page Up/Down glide through the smooth-scroll engine instead of jumping.
+- **Bypass on demand** — hold Option while scrolling to send raw wheel events through unchanged.
+- **Launch at login** — start automatically in the menu bar.
+- **Debug window** — floating log for troubleshooting event handling.
 
 
 Project Layout
